@@ -16,6 +16,12 @@ Hosted/team-shareable short links are not included.
 
 ## Install
 
+The simplest:
+
+```bash
+pi install git:github.com/WhimsicalCode/pi-short-links
+```
+
 From this directory:
 
 ```bash
