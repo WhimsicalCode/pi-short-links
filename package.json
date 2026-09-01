@@ -1,0 +1,51 @@
+{
+  "name": "pi-short-links",
+  "version": "0.1.0",
+  "description": "Local-only short links for URLs generated during Pi sessions.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "short-links",
+    "url-shortener"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "files": [
+    "extensions",
+    "src",
+    "skills",
+    "examples",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "npm run format:check && npm run typecheck && npm test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "test:coverage": "node --test --experimental-strip-types --experimental-test-coverage tests/*.test.ts",
+    "typecheck": "tsc"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.9.0"
+  }
+}
