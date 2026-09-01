@@ -28,7 +28,19 @@ test("registers a lazy tool with the documented result and shutdown", async (con
 
   let capturedTool: CapturedTool | undefined;
   let shutdown: (() => Promise<void>) | undefined;
+  let eventChannel: string | undefined;
+  let eventHandler: ((data: unknown) => void) | undefined;
+  let unsubscribed = 0;
   const api = {
+    events: {
+      on(channel: string, handler: (data: unknown) => void) {
+        eventChannel = channel;
+        eventHandler = handler;
+        return () => {
+          unsubscribed += 1;
+        };
+      },
+    },
     registerTool(definition: unknown) {
       capturedTool = definition as CapturedTool;
     },
@@ -55,6 +67,8 @@ test("registers a lazy tool with the documented result and shutdown", async (con
   const shutdownHandler = requireCaptured(shutdown, "shutdown handler");
   assert.equal(tool.name, "create_short_link");
   assert.match(tool.description, /only on this machine/);
+  assert.equal(eventChannel, "pi-short-links:create:v1");
+  assert.ok(eventHandler);
   await assert.rejects(
     fetchWithShortTimeout(`http://127.0.0.1:${port}/healthz`),
   );
@@ -88,6 +102,7 @@ test("registers a lazy tool with the documented result and shutdown", async (con
 
   await shutdownHandler();
   shutdown = undefined;
+  assert.equal(unsubscribed, 1);
   await assert.rejects(
     fetchWithShortTimeout(`http://127.0.0.1:${port}/healthz`),
   );

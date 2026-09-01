@@ -43,6 +43,8 @@ Ask Pi for a short link, or use a command:
 
 The model can also call the `create_short_link` tool with optional `title`, `description`, `tags`, `slug`, `expiresIn`, and `dedupe` fields.
 
+Other Pi extensions can create links without routing a long target through the model. `pi-short-links` exposes the versioned in-process event service `pi-short-links:create:v1`. It accepts the same generic URL metadata (except custom `slug`) and returns only the local short URL, local-only flag, and warnings. If no service claims an event request, the calling extension remains responsible for its own fallback.
+
 A result looks like this:
 
 ```text
@@ -84,6 +86,7 @@ V1 accepts only `127.0.0.1` as the host. Invalid ports, ranges, hosts, and empty
 - Link creation makes no external network calls.
 - Serializes writes made by one Pi process so parallel tool calls do not lose links.
 - Does not return an expired link when deduplicating a URL.
+- Provides a generic in-process event service for optional extension composition.
 - Nothing keeps running after Pi exits.
 
 ## Development

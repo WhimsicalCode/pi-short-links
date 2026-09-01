@@ -43,7 +43,7 @@ export class ShortLinkService {
 
   async create(
     input: CreateLinkInput,
-    source: "tool" | "command",
+    source: "tool" | "command" | "extension",
   ): Promise<CreatedShortLink> {
     const prepared = prepareLinkInput(input);
     const server = await this.server.start();
@@ -79,7 +79,7 @@ export function prepareLinkInput(input: CreateLinkInput): PreparedLinkInput {
 export async function createPreparedLink(
   store: JsonLinkStore,
   input: PreparedLinkInput,
-  source: "tool" | "command",
+  source: "tool" | "command" | "extension",
   now = new Date(),
 ): Promise<CreateLinkResult> {
   const nowMs = now.getTime();

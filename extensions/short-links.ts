@@ -5,6 +5,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
 import { loadConfig } from "../src/config.ts";
+import { registerShortLinkEventService } from "../src/events.ts";
 import { ShortLinkService, type CreatedShortLink } from "../src/links.ts";
 import { RedirectServer, type RunningServer } from "../src/server.ts";
 import { JsonLinkStore } from "../src/store.ts";
@@ -38,6 +39,10 @@ export default function shortLinksExtension(pi: ExtensionAPI) {
   });
   const server = new RedirectServer(config.server, store);
   const links = new ShortLinkService(store, server);
+  const unsubscribeEventService = registerShortLinkEventService(
+    pi.events,
+    links,
+  );
 
   pi.registerTool({
     name: "create_short_link",
@@ -157,6 +162,7 @@ export default function shortLinksExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async () => {
+    unsubscribeEventService();
     await server.stop();
   });
 }
