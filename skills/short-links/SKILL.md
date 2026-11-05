@@ -9,9 +9,9 @@ Use `create_short_link` when it is available and the user asks for a shorter or 
 
 Do not call `create_short_link` after `create_metabase_link`; pi-metabase-links composes with this package directly through the in-process event service.
 
-Always say that returned links are local-only: they work only on the user's machine while Pi's short-links server is running.
+When the result is a local short link, say that it is local-only: it works only on the user's machine while Pi's short-links server is running. Do not use local short links when the user needs a URL that teammates or other machines can open; return the original URL instead.
 
-Do not use local short links when the user needs a URL that teammates or other machines can open. Return the original URL instead, or explain that this package is local-only.
+When `PI_SHORT_LINKS_COMMAND` is configured, results say "Short link" and report `localOnly: false`; who can open them depends on the user's command, so don't call them local-only.
 
 Do not start background servers with `bash`, `nohup`, launch agents, tmux, or other unmanaged processes. The extension starts and stops its own in-process server.
 

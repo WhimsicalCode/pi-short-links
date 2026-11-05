@@ -1,7 +1,7 @@
 {
   "name": "pi-short-links",
   "version": "0.1.0",
-  "description": "Local-only short links for URLs generated during Pi sessions.",
+  "description": "Short links for URLs generated during Pi sessions: local by default, or created by your own command.",
   "type": "module",
   "keywords": [
     "pi-package",

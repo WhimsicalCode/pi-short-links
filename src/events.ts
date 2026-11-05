@@ -1,4 +1,4 @@
-import type { CreatedShortLink } from "./links.ts";
+import type { ShortLinkResult } from "./command.ts";
 import type { CreateLinkInput } from "./types.ts";
 
 export const SHORT_LINK_CREATE_EVENT = "pi-short-links:create:v1";
@@ -15,11 +15,8 @@ export type ShortLinkCreateRequestV1 = {
     dedupe?: boolean;
   };
   claim(): boolean;
-  resolve(result: {
-    shortUrl: string;
-    localOnly: true;
-    warnings: string[];
-  }): void;
+  // localOnly is false when PI_SHORT_LINKS_COMMAND creates links teammates can open.
+  resolve(result: ShortLinkResult): void;
   reject(error: unknown): void;
 };
 
@@ -28,10 +25,7 @@ type EventBus = {
 };
 
 type ShortLinkCreator = {
-  create(
-    input: CreateLinkInput,
-    source: "extension",
-  ): Promise<CreatedShortLink>;
+  create(input: CreateLinkInput, source: "extension"): Promise<ShortLinkResult>;
 };
 
 export function registerShortLinkEventService(
@@ -43,12 +37,7 @@ export function registerShortLinkEventService(
 
     void (async () => {
       try {
-        const created = await links.create(data.input, "extension");
-        data.resolve({
-          shortUrl: `http://${created.server.host}:${created.server.port}/s/${encodeURIComponent(created.link.slug)}`,
-          localOnly: true,
-          warnings: created.warnings,
-        });
+        data.resolve(await links.create(data.input, "extension"));
       } catch (error: unknown) {
         data.reject(error);
       }

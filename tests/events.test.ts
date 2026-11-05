@@ -6,29 +6,12 @@ import {
   SHORT_LINK_CREATE_EVENT,
   type ShortLinkCreateRequestV1,
 } from "../src/events.ts";
-import type { CreatedShortLink } from "../src/links.ts";
+import type { ShortLinkResult } from "../src/command.ts";
 
-const CREATED_LINK: CreatedShortLink = {
-  link: {
-    id: "monthly-users-abc",
-    slug: "monthly-users-abc",
-    targetUrl: "https://metabase.example.com/question#payload",
-    targetUrlHash: `sha256:${"0".repeat(64)}`,
-    title: "Monthly users",
-    description: null,
-    tags: [],
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-    expiresAt: null,
-    lastAccessedAt: null,
-    accessCount: 0,
-    source: "extension",
-    metadata: {},
-  },
-  deduped: false,
-  collisionResolved: false,
+const CREATED_LINK: ShortLinkResult = {
+  shortUrl: "http://127.0.0.1:8765/s/monthly-users-abc",
+  localOnly: true,
   warnings: [],
-  server: { host: "127.0.0.1", port: 8765, started: true },
 };
 
 test("event service claims synchronously and delegates to link creation", async () => {
@@ -53,11 +36,7 @@ test("event service claims synchronously and delegates to link creation", async 
   registerShortLinkEventService(events, service);
 
   let claims = 0;
-  const completed = deferred<{
-    shortUrl: string;
-    localOnly: true;
-    warnings: string[];
-  }>();
+  const completed = deferred<ShortLinkResult>();
   const request: ShortLinkCreateRequestV1 = {
     version: 1,
     input: {

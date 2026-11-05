@@ -108,6 +108,67 @@ test("registers a lazy tool with the documented result and shutdown", async (con
   );
 });
 
+test("uses PI_SHORT_LINKS_COMMAND for the tool and the event service", async (context) => {
+  const previous = process.env.PI_SHORT_LINKS_COMMAND;
+  process.env.PI_SHORT_LINKS_COMMAND =
+    "cat >/dev/null; echo https://s.example.com/abc";
+  context.after(() => {
+    if (previous === undefined) delete process.env.PI_SHORT_LINKS_COMMAND;
+    else process.env.PI_SHORT_LINKS_COMMAND = previous;
+  });
+
+  let capturedTool: CapturedTool | undefined;
+  let eventHandler: ((data: unknown) => void) | undefined;
+  const api = {
+    events: {
+      on(_channel: string, handler: (data: unknown) => void) {
+        eventHandler = handler;
+        return () => {};
+      },
+    },
+    registerTool(definition: unknown) {
+      capturedTool = definition as CapturedTool;
+    },
+    registerCommand() {},
+    on() {},
+  } as unknown as ExtensionAPI;
+
+  shortLinksExtension(api);
+  const tool = requireCaptured(capturedTool, "tool");
+  assert.doesNotMatch(tool.description, /only on this machine/);
+
+  const result = await tool.execute(
+    "test-call",
+    { url: "https://example.com/report" },
+    undefined,
+    undefined,
+    undefined,
+  );
+  assert.equal(
+    result.content[0]?.text,
+    "Short link: https://s.example.com/abc",
+  );
+  assert.equal(result.details.localOnly, false);
+
+  const resolved = await new Promise((resolve, reject) => {
+    requireCaptured(
+      eventHandler,
+      "event handler",
+    )({
+      version: 1,
+      input: { url: "https://example.com/report" },
+      claim: () => true,
+      resolve,
+      reject,
+    });
+  });
+  assert.deepEqual(resolved, {
+    shortUrl: "https://s.example.com/abc",
+    localOnly: false,
+    warnings: [],
+  });
+});
+
 type CapturedTool = {
   name: string;
   description: string;

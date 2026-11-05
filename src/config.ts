@@ -1,13 +1,16 @@
 import { homedir } from "node:os";
 import path from "node:path";
+import type { CommandConfig } from "./command.ts";
 import type { RedirectServerConfig } from "./server.ts";
 
 const DEFAULT_STORE = "~/.pi/agent/short-links/links.json";
+const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 
 export type ShortLinksConfig = {
   server: RedirectServerConfig;
   storePath: string;
   secureStoreDirectory: boolean;
+  command: CommandConfig | null;
 };
 
 export function loadConfig(
@@ -43,7 +46,31 @@ export function loadConfig(
     server: { host: "127.0.0.1", portStart, portEnd },
     storePath: expandHome(configuredStore ?? DEFAULT_STORE),
     secureStoreDirectory: configuredStore === undefined,
+    command: loadCommandConfig(environment),
   };
+}
+
+function loadCommandConfig(
+  environment: NodeJS.ProcessEnv,
+): CommandConfig | null {
+  const command = environment.PI_SHORT_LINKS_COMMAND;
+  if (command === undefined) return null;
+  if (!command.trim()) {
+    throw new Error(
+      "Invalid PI_SHORT_LINKS_COMMAND: command must not be empty.",
+    );
+  }
+
+  const rawTimeout = environment.PI_SHORT_LINKS_COMMAND_TIMEOUT_MS;
+  if (rawTimeout === undefined) {
+    return { command, timeoutMs: DEFAULT_COMMAND_TIMEOUT_MS };
+  }
+  if (!/^\d+$/.test(rawTimeout) || Number(rawTimeout) < 1) {
+    throw new Error(
+      "Invalid PI_SHORT_LINKS_COMMAND_TIMEOUT_MS: expected a positive integer.",
+    );
+  }
+  return { command, timeoutMs: Number(rawTimeout) };
 }
 
 export function expandHome(value: string): string {

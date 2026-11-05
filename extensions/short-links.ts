@@ -4,6 +4,7 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
+import { CommandLinkService, type ShortLinkResult } from "../src/command.ts";
 import { loadConfig } from "../src/config.ts";
 import { registerShortLinkEventService } from "../src/events.ts";
 import { ShortLinkService, type CreatedShortLink } from "../src/links.ts";
@@ -39,52 +40,85 @@ export default function shortLinksExtension(pi: ExtensionAPI) {
   });
   const server = new RedirectServer(config.server, store);
   const links = new ShortLinkService(store, server);
-  const unsubscribeEventService = registerShortLinkEventService(
-    pi.events,
-    links,
-  );
+  const commandLinks = config.command
+    ? new CommandLinkService(config.command)
+    : null;
+
+  // One entry point for the tool, the commands, and the event service: the configured
+  // command when PI_SHORT_LINKS_COMMAND is set, otherwise the local store and server.
+  async function createLink(
+    input: CreateLinkInput,
+    source: "tool" | "command" | "extension",
+  ): Promise<ShortLinkResult & { local?: CreatedShortLink }> {
+    if (commandLinks) return commandLinks.create(input);
+    const created = await links.create(input, source);
+    return {
+      shortUrl: shortUrl(created.server, created.link.slug),
+      localOnly: true,
+      warnings: created.warnings,
+      local: created,
+    };
+  }
+
+  const unsubscribeEventService = registerShortLinkEventService(pi.events, {
+    async create(input, source) {
+      const { shortUrl, localOnly, warnings } = await createLink(input, source);
+      return { shortUrl, localOnly, warnings };
+    },
+  });
 
   pi.registerTool({
     name: "create_short_link",
     label: "Create Short Link",
-    description:
-      "Create a local short link for a URL. The link works only on this machine while Pi's short-links server is running.",
-    promptSnippet:
-      "Create local short links for long URLs generated during the session.",
-    promptGuidelines: [
-      "Use create_short_link when the user asks for a short link or when a generated URL is too long to share comfortably.",
-      "Always tell the user that create_short_link returns a local-only link that works only on this machine while Pi's short-links server is running.",
-      "Do not use create_short_link when the user needs a link that teammates can open.",
-    ],
+    description: commandLinks
+      ? "Create a short link for a URL with the configured short-link command."
+      : "Create a local short link for a URL. The link works only on this machine while Pi's short-links server is running.",
+    promptSnippet: commandLinks
+      ? "Create short links for long URLs generated during the session."
+      : "Create local short links for long URLs generated during the session.",
+    promptGuidelines: commandLinks
+      ? [
+          "Use create_short_link when the user asks for a short link or when a generated URL is too long to share comfortably.",
+        ]
+      : [
+          "Use create_short_link when the user asks for a short link or when a generated URL is too long to share comfortably.",
+          "Always tell the user that create_short_link returns a local-only link that works only on this machine while Pi's short-links server is running.",
+          "Do not use create_short_link when the user needs a link that teammates can open.",
+        ],
     parameters: CreateShortLinkParameters,
     async execute(_toolCallId, parameters) {
-      const created = await links.create(parameters as CreateLinkInput, "tool");
-      const url = shortUrl(created.server, created.link.slug);
+      const result = await createLink(parameters as CreateLinkInput, "tool");
+      const created = result.local;
       return {
-        content: [{ type: "text", text: resultText(url, created.warnings) }],
-        details: {
-          shortUrl: url,
-          targetUrl: created.link.targetUrl,
-          slug: created.link.slug,
-          localOnly: true,
-          deduped: created.deduped,
-          collisionResolved: created.collisionResolved,
-          expiresAt: created.link.expiresAt,
-          warnings: created.warnings,
-          server: created.server,
-        },
+        content: [{ type: "text", text: resultText(result) }],
+        details: created
+          ? {
+              shortUrl: result.shortUrl,
+              targetUrl: created.link.targetUrl,
+              slug: created.link.slug,
+              localOnly: true,
+              deduped: created.deduped,
+              collisionResolved: created.collisionResolved,
+              expiresAt: created.link.expiresAt,
+              warnings: created.warnings,
+              server: created.server,
+            }
+          : {
+              shortUrl: result.shortUrl,
+              localOnly: false,
+              warnings: result.warnings,
+            },
       };
     },
   });
 
   pi.registerCommand("short-link", {
-    description: "Create a local short link: /short-link <url>",
+    description: "Create a short link: /short-link <url>",
     handler: async (argumentsText, context) => {
       try {
         const url = argumentsText.trim();
         if (!url) throw new Error("Usage: /short-link <url>");
-        const created = await links.create({ url }, "command");
-        notifyCreated(context, created);
+        notify(context, resultText(await createLink({ url }, "command")));
       } catch (error: unknown) {
         notify(context, errorMessage(error), "error");
       }
@@ -92,7 +126,7 @@ export default function shortLinksExtension(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("short-links", {
-    description: "Manage local short links: create/list/start/stop/status",
+    description: "Manage short links: create/list/start/stop/status",
     handler: async (argumentsText, context) => {
       const [command, ...rest] = argumentsText.trim().split(/\s+/);
       const remaining = rest.join(" ");
@@ -110,8 +144,10 @@ export default function shortLinksExtension(pi: ExtensionAPI) {
           if (!remaining) {
             throw new Error("Usage: /short-links create <url>");
           }
-          const created = await links.create({ url: remaining }, "command");
-          notifyCreated(context, created);
+          notify(
+            context,
+            resultText(await createLink({ url: remaining }, "command")),
+          );
           return;
         }
 
@@ -145,7 +181,7 @@ export default function shortLinksExtension(pi: ExtensionAPI) {
           const status = server.status();
           notify(
             context,
-            `Short-links server: ${status.running ? `running at http://${status.host}:${status.port}` : "stopped"}\nStore: ${store.filePath}\nLinks: ${Object.keys(data.links).length}\nLocal-only; hosted/team-shareable links are not included.`,
+            `Short-links server: ${status.running ? `running at http://${status.host}:${status.port}` : "stopped"}\nStore: ${store.filePath}\nLinks: ${Object.keys(data.links).length}\n${commandLinks ? "New links: created by PI_SHORT_LINKS_COMMAND." : "Local-only; set PI_SHORT_LINKS_COMMAND for team-shareable links."}`,
           );
           return;
         }
@@ -195,24 +231,22 @@ async function listText(
     .join("\n");
 }
 
-function notifyCreated(
-  context: ExtensionCommandContext,
-  created: CreatedShortLink,
-): void {
-  notify(
-    context,
-    resultText(shortUrl(created.server, created.link.slug), created.warnings),
-  );
-}
-
 function shortUrl(server: RunningServer, slug: string): string {
   return `http://${server.host}:${server.port}/s/${encodeURIComponent(slug)}`;
 }
 
-function resultText(url: string, warnings: string[]): string {
+function resultText({
+  shortUrl,
+  localOnly,
+  warnings,
+}: ShortLinkResult): string {
   return [
-    `Local short link: ${url}`,
-    "Works only on this machine while Pi's short-links server is running.",
+    ...(localOnly
+      ? [
+          `Local short link: ${shortUrl}`,
+          "Works only on this machine while Pi's short-links server is running.",
+        ]
+      : [`Short link: ${shortUrl}`]),
     ...warnings.map((warning) => `Warning: ${warning}`),
   ].join("\n");
 }
